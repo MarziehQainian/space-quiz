@@ -385,6 +385,77 @@
     }
     .score-caption { color: var(--muted); font-size: 13px; }
 
+    .review-panel {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      text-align: left;
+    }
+
+    .review-panel h2 {
+      margin-bottom: 14px;
+      font-size: clamp(20px, 4vw, 24px);
+      letter-spacing: -.03em;
+    }
+
+    .review-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .review-item {
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface-raised);
+    }
+
+    .review-question {
+      margin-bottom: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    .review-meta {
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .review-answer strong {
+      color: var(--text);
+    }
+
+    .review-answer.correct strong,
+    .review-answer.selected strong {
+      color: var(--correct);
+    }
+
+    .review-answer.wrong strong {
+      color: var(--wrong);
+    }
+
+    .review-explanation {
+      margin-top: 11px;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .review-empty {
+      margin-top: 12px;
+      padding: 16px 18px;
+      border: 1px solid color-mix(in srgb, var(--correct) 35%, var(--line));
+      border-radius: 12px;
+      color: var(--correct);
+      background: color-mix(in srgb, var(--correct) 8%, var(--surface));
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
     @keyframes shake {
       15%, 45%, 75% { transform: translateX(-6px); }
       30%, 60%, 90% { transform: translateX(6px); }
@@ -444,6 +515,13 @@
         <p class="results-copy" id="result-copy"></p>
         <div class="final-score" id="final-score"></div>
         <div class="score-caption">correct answers out of 10</div>
+
+        <div class="review-panel" id="review-panel" aria-live="polite">
+          <h2>Missed questions</h2>
+          <div id="missed-questions" class="review-list"></div>
+          <div id="no-missed-questions" class="review-empty" hidden>Perfect score! No missed questions to review — you nailed every answer.</div>
+        </div>
+
         <button class="restart" id="restart" type="button">Launch another mission <span aria-hidden="true">↻</span></button>
       </div>
     </section>
@@ -533,9 +611,12 @@
     const answers = document.getElementById("answers");
     const feedback = document.getElementById("feedback");
     const nextButton = document.getElementById("next");
+    const missedQuestions = document.getElementById("missed-questions");
+    const noMissedQuestions = document.getElementById("no-missed-questions");
     let current = 0;
     let score = 0;
     let answered = false;
+    let selectedAnswers = Array(questions.length).fill(null);
 
     function renderQuestion() {
       const item = questions[current];
@@ -567,6 +648,7 @@
         return;
       }
       answered = true;
+      selectedAnswers[current] = selected;
       const item = questions[current];
       const buttons = [...answers.querySelectorAll(".answer")];
       buttons.forEach(button => { button.disabled = true; });
@@ -593,6 +675,52 @@
       quizScreen.hidden = true;
       resultsScreen.hidden = false;
       document.getElementById("final-score").textContent = `${score}/10`;
+      const missed = questions
+        .map((item, index) => ({
+          ...item,
+          selectedIndex: selectedAnswers[index],
+          selectedAnswer: selectedAnswers[index] === null ? "No answer selected" : item.options[selectedAnswers[index]],
+          correctAnswer: item.options[item.answer],
+          number: index + 1
+        }))
+        .filter(item => item.selectedIndex !== item.answer);
+
+      missedQuestions.replaceChildren();
+      if (missed.length === 0) {
+        noMissedQuestions.hidden = false;
+        missedQuestions.hidden = true;
+      } else {
+        noMissedQuestions.hidden = true;
+        missedQuestions.hidden = false;
+        missed.forEach(item => {
+          const reviewItem = document.createElement("article");
+          reviewItem.className = "review-item";
+
+          const reviewQuestion = document.createElement("div");
+          reviewQuestion.className = "review-question";
+          reviewQuestion.textContent = `Question ${item.number}: ${item.question}`;
+
+          const reviewMeta = document.createElement("div");
+          reviewMeta.className = "review-meta";
+
+          const selected = document.createElement("div");
+          selected.className = `review-answer ${item.selectedIndex === item.answer ? "correct" : "wrong"}`;
+          selected.innerHTML = `<strong>Your answer:</strong> ${item.selectedAnswer}`;
+
+          const correct = document.createElement("div");
+          correct.className = "review-answer correct";
+          correct.innerHTML = `<strong>Correct answer:</strong> ${item.correctAnswer}`;
+
+          const explanation = document.createElement("div");
+          explanation.className = "review-explanation";
+          explanation.textContent = item.explanation;
+
+          reviewMeta.append(selected, correct);
+          reviewItem.append(reviewQuestion, reviewMeta, explanation);
+          missedQuestions.append(reviewItem);
+        });
+      }
+
       const emoji = document.getElementById("result-emoji");
       const title = document.getElementById("result-title");
       const copy = document.getElementById("result-copy");
